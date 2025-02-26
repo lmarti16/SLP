@@ -70,46 +70,65 @@ cabeceras <- c(
     "Guadalcázar", "Venado", "Salinas", "Santa María del Río"
 )
 
-# Crear dos subconjuntos: uno con cabeceras y otro con no-cabeceras
-mapa_cab     <- mapa_unido %>% filter(NOMBRE_MUNICIPIO %in% cabeceras)
-mapa_no_cab  <- mapa_unido %>% filter(!NOMBRE_MUNICIPIO %in% cabeceras)
 
-# 7) Graficar el mapa, coloreando por 'Distrito_Judicial'
-#    y colocando las etiquetas con geom_sf_label.
-#    Usaremos dos capas de texto:
-#    - una normal para municipios que no son cabecera
-#    - otra en negritas (fontface = "bold") para las cabeceras.
-
-# 6.1) Sustituir "San Luis Potosí" con salto de línea
-mapa_cab <- mapa_cab %>%
-  mutate(
-    NOMBRE_MUNICIPIO = ifelse(
-      NOMBRE_MUNICIPIO == "San Luis Potosí",
-      "San Luis\nPotosí", # <-- aquí el 'enter'
-      NOMBRE_MUNICIPIO
+#################################################
+# 7) Insertar salto de línea en municipios con +2 palabras
+#################################################
+mapa_unido <- mapa_unido %>%
+    mutate(
+        NOMBRE_MUNICIPIO = sapply(NOMBRE_MUNICIPIO, function(x) {
+            # Separamos por espacios
+            splitted <- unlist(strsplit(x, " "))
+            # Si hay más de 2 palabras, insertamos \n después de la segunda
+            if (length(splitted) > 2) {
+                paste(
+                    paste(splitted[1:2], collapse = " "),
+                    paste(splitted[3:length(splitted)], collapse = " "),
+                    sep = "\n"
+                )
+            } else {
+                x
+            }
+        })
     )
-  )
 
+# Ahora, separamos cabeceras y no cabeceras
+mapa_cab    <- mapa_unido %>% filter(NOMBRE_MUNICIPIO %in% sapply(cabeceras, function(z) {
+    # El mismo truco de partición para que coincida con la versión "con salto de línea"
+    splitted <- unlist(strsplit(z, " "))
+    if (length(splitted) > 2) {
+        paste(
+            paste(splitted[1:2], collapse = " "),
+            paste(splitted[3:length(splitted)], collapse = " "),
+            sep = "\n"
+        )
+    } else {
+        z
+    }
+}))
+mapa_no_cab <- mapa_unido %>% filter(!NOMBRE_MUNICIPIO %in% mapa_cab$NOMBRE_MUNICIPIO)
 
-
+#################################################
+# 8) Graficar
+#################################################
 ggplot() +
-    # Malla de municipios no cabecera
+    # Municipios completos (fondo)
     geom_sf(data = mapa_unido, aes(fill = Distrito_Judicial), 
             color = "black", size = 0.2) +
     
-    # Etiquetas de municipios no cabecera
+    # Municipios no cabecera (cursiva)
     geom_sf_label(
         data = mapa_no_cab, 
         aes(label = NOMBRE_MUNICIPIO),
         size = 1,
         fill = "white",
         color = "black",
-        alpha = 0,        # Texto sin fondo "visible"
+        alpha = 0,
         label.size = NA,
-  fontface = "italic"   # <--- Cursiva
+        fontface = "italic"
     ) +
-     
-    # Etiquetas de cabeceras (en negritas)
+    
+    # Municipios cabecera (negritas)
     geom_sf_label(
         data = mapa_cab, 
         aes(label = NOMBRE_MUNICIPIO),
@@ -118,17 +137,29 @@ ggplot() +
         color = "black",
         alpha = 0,
         label.size = NA,
-        fontface = "bold" # <--- Aquí la negrita
+        fontface = "bold"
     ) +
     
-    # Tema de mapa y ajustes de leyenda
     theme_map() + 
-    guides(fill = guide_legend(ncol = 8)) +
-    theme(legend.position = "bottom") +
+    # Forzar la leyenda a mostrarse en 1 sola columna 
+    # (opcional, dependiendo de cuántas categorías tengas).
+    guides(fill = guide_legend(ncol = 1)) +
+    theme(
+        plot.title = element_text(hjust = 0.5, size = 18,face = "bold"),  # Centrar y ajustar el tamaño del título
+        # Ubica la leyenda a la izquierda
+        legend.position = "left",
+        # Interpretar el caption como Markdown/HTML
+        plot.caption = ggtext::element_markdown(hjust = 0.5) 
+    ) +
     
-    # Título, leyenda y caption
     labs(
-        title = "Mapa Municipal de los Distritos Judiciales de San Luis Potosí",
+        title = "Mapa estatal de los distrititos judiciales de San Luis Potosí",
         fill  = "Distrito Judicial",
-        caption = "HÉCTOR VEGA ROBLES\nLICENCIADO EN DERECHO\nMAESTRO EN POLÍTICA CRIMINAL\nESPECIALISTA EN LITIGACIÓN PENAL ORAL"
+        caption = paste0(
+            "<span style='font-size:14pt'><strong>HÉCTOR VEGA ROBLES</strong></span><br/>",
+            "<span style='font-size:10pt'>LICENCIADO EN DERECHO<br/>",
+            "MAESTRO EN POLÍTICA CRIMINAL<br/>",
+            "ESPECIALISTA  EN  LITIGACIÓN  PENAL  ORAL</span>"
+        )
     )
+
