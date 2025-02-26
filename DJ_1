@@ -119,6 +119,8 @@ mapa_cab    <- mapa_unido %>% filter(NOMBRE_MUNICIPIO %in% sapply(cabeceras, fun
     }
 }))
 mapa_no_cab <- mapa_unido %>% filter(!NOMBRE_MUNICIPIO %in% mapa_cab$NOMBRE_MUNICIPIO)
+
+#Generamos Sección
 mapa_no_cab_1 <- filter(mapa_no_cab, Distrito_Judicial == "I")
 mapa_cab_1 <- filter(mapa_cab , Distrito_Judicial == "I")
 sec_SLP_1 <- filter(sec_SLP , Distrito_Judicial == "I")
@@ -174,6 +176,6 @@ ggplot() +
     
     # Ajustes en la leyenda y título (opcional)
     labs(
-        title = "MAPA DEL DISTRITO JUFICIAL I",
+        title = "MAPA DEL DISTRITO JUDICIAL I",
         fill  = "Municipio"
     )
