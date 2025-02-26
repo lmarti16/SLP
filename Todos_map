@@ -1,0 +1,184 @@
+# 1) Cargar librerías
+library(sf)        # Para leer y manejar objetos espaciales
+library(dplyr)     # Para manipular data frames (join, mutate, etc.)
+library(ggplot2)   # Para graficar
+library(ggthemes)  # Para usar theme_map()
+
+# 2) Leer el archivo GeoPackage
+ruta_gpkg <- "D:/52556/Documents/PRI_24/SNAL_PRI/data/mapa_MUN.gpkg"
+mapa_MUN <- st_read(ruta_gpkg)
+
+# 3) Crear (o cargar) tu DataFrame con la columna CVE_MUN (y la asignación de Distritos Judiciales)
+#    Ajusta este ejemplo según tus datos "municipios_slp".
+#    Asegúrate de que la columna se llame CVE_MUN en ambos.
+
+municipios_slp <- data.frame(
+    CVE_MUN = c(1,2,3,4,5,6,7,8,9,10,
+                11,12,13,14,15,16,17,18,19,20,
+                21,22,23,24,25,26,27,28,29,30,
+                31,32,33,34,35,36,37,38,39,40,
+                41,42,43,44,45,46,47,48,49,50,
+                51,52,53,54,55,56,57,58),
+    Nombre_MUN = c(
+        "Ahualulco","Alaquines","Aquismón","Armadillo de los Infante","Cárdenas",
+        "Catorce","Cedral","Cerritos","Cerro de San Pedro","Ciudad del Maíz",
+        "Ciudad Fernández","Tancanhuitz","Ciudad Valles","Coxcatlán","Charcas",
+        "Ebano","Guadalcázar","Huehuetlán","Lagunillas","Matehuala",
+        "Mexquitic de Carmona","Moctezuma","Rayón","Rioverde","Salinas",
+        "San Antonio","San Ciro de Acosta","San Luis Potosí","San Martín Chalchicuautla","San Nicolás Tolentino",
+        "Santa Catarina","Santa María del Río","Santo Domingo","San Vicente Tancuayalab","Soledad de Graciano Sánchez","Tamasopo",
+        "Tamazunchale","Tampacán","Tampamolón Corona","Tamuín",
+        "Tanlajás","Tanquián de Escobedo","Tierra Nueva","Vanegas","Venado",
+        "Villa de Arriaga","Villa de Guadalupe","Villa de la Paz","Villa de Ramos","Villa de Reyes",
+        "Villa Hidalgo","Villa Juárez","Axtla de Terrazas","Xilitla","Zaragoza",
+        "Villa de Arista","Matlapa","El Naranjo"
+    ),
+    # Asignar distrito (adaptado a tu información)
+    Distrito_Judicial = c(
+        "I","IV","VII","I","IV",
+        "II","II","IX","I","V",
+        "III","VII","VI","VII","XI",
+        "VI","X","VII","IV","II",
+        "I","XI","IV","III","XII",
+        "VII","III","I","VIII","IX",
+        "IV","XIII","XI","VI","I","IV",
+        "VIII","VIII","VII","VI",
+        "VI","VII","XIII","II","XI",
+        "I","II","II","XII","XIII",
+        "X","IX","VIII","VII","I",
+        "X","VIII","V"
+    )
+)
+
+# 4) Convertir ambas CVE_MUN a numérico (si fuera factor o caracter)
+mapa_MUN <- mapa_MUN %>%
+    mutate(CVE_MUN = as.numeric(CVE_MUN))
+
+municipios_slp <- municipios_slp %>%
+    mutate(CVE_MUN = as.numeric(CVE_MUN))
+
+mapa_MUN <- filter(mapa_MUN, ENTIDAD == 24)
+
+# 5) Unir por CVE_MUN
+mapa_unido <- mapa_MUN %>%
+    left_join(municipios_slp, by = "CVE_MUN")
+
+# 6) Definir las cabeceras de distrito judicial:
+cabeceras <- c(
+    "San Luis Potosí", "Matehuala", "Rioverde", "Cárdenas", "Ciudad del Maíz",
+    "Ciudad Valles", "Tancanhuitz", "Tamazunchale", "Cerritos",
+    "Guadalcázar", "Venado", "Salinas", "Santa María del Río"
+)
+
+
+# 3) Crear un data frame sin geometría, quedándonos sólo con MUNICIPIO y CVE_MUN
+df_municipios <- mapa_unido %>%
+    st_drop_geometry() %>%         # Remueve la parte geométrica
+    select(MUNICIPIO, CVE_MUN,Distrito_Judicial,Nombre_MUN) %>% # Conserva sólo estas dos columnas
+    distinct()        
+
+# 2) Definir la ruta al shapefile e importarlo con st_read
+ruta_shp <- "D:/Descargas/SHAPEFILES_MEX/24 SAN LUIS POTOSI/SECCION.shp"
+seccion_sf <- st_read(ruta_shp)
+
+sec_SLP <- left_join(seccion_sf, df_municipios, by = c("MUNICIPIO"))
+
+#################################################
+# 7) Insertar salto de línea en municipios con +2 palabras
+#################################################
+mapa_unido <- mapa_unido %>%
+    mutate(
+        NOMBRE_MUNICIPIO = sapply(NOMBRE_MUNICIPIO, function(x) {
+            # Separamos por espacios
+            splitted <- unlist(strsplit(x, " "))
+            # Si hay más de 2 palabras, insertamos \n después de la segunda
+            if (length(splitted) > 2) {
+                paste(
+                    paste(splitted[1:2], collapse = " "),
+                    paste(splitted[3:length(splitted)], collapse = " "),
+                    sep = "\n"
+                )
+            } else {
+                x
+            }
+        })
+    )
+
+# Ahora, separamos cabeceras y no cabeceras
+mapa_cab    <- mapa_unido %>% filter(NOMBRE_MUNICIPIO %in% sapply(cabeceras, function(z) {
+    # El mismo truco de partición para que coincida con la versión "con salto de línea"
+    splitted <- unlist(strsplit(z, " "))
+    if (length(splitted) > 2) {
+        paste(
+            paste(splitted[1:2], collapse = " "),
+            paste(splitted[3:length(splitted)], collapse = " "),
+            sep = "\n"
+        )
+    } else {
+        z
+    }
+}))
+mapa_no_cab <- mapa_unido %>% filter(!NOMBRE_MUNICIPIO %in% mapa_cab$NOMBRE_MUNICIPIO)
+
+
+# Vector de distritos (en orden) 
+distritos <- c("I", "II", "III", "IV", "V", "VI", 
+               "VII", "VIII", "IX", "X", "XI", "XII", "XIII")
+
+# Generar un PDF en horizontal (landscape), tamaño carta 11 x 8.5
+pdf("Mapas_Distritos_Judiciales.pdf", width = 11, height = 8.5)
+
+# Librerías
+library(dplyr)   # Para filter y %>%
+library(ggplot2)
+library(sf)
+library(ggthemes)
+library(ggspatial)
+
+# Bucle para cada distrito
+for(d in distritos) {
+  
+  # Filtrar los datos para el distrito actual
+  mapa_no_cab_d <- filter(mapa_no_cab, Distrito_Judicial == d)
+  mapa_cab_d    <- filter(mapa_cab,    Distrito_Judicial == d)
+  sec_SLP_d     <- filter(sec_SLP,     Distrito_Judicial == d)
+  
+  # Crear el mapa
+  p <- ggplot() +
+    # 1) Mapa base con tiles (OpenStreetMap); puedes ajustar el "zoom" según necesites
+    annotation_map_tile(type = "osm", zoom = 12) +
+    
+    # 2) Polígonos de secciones
+    geom_sf(data = sec_SLP_d, aes(fill = Nombre_MUN),
+            color = "black", size = 0.2, alpha = .6) +
+    
+    # 3) Etiquetas de Sección
+    geom_sf_label(data = sec_SLP_d, aes(label = SECCION),
+                  size = 0.2, fill = "white", color = "black",
+                  alpha = 0, label.size = NA) +
+    
+    # 4) Municipios no cabecera (en cursiva)
+    geom_sf_label(data = mapa_no_cab_d, aes(label = NOMBRE_MUNICIPIO),
+                  size = 1, fill = "white", color = "black",
+                  alpha = 0, label.size = NA, fontface = "italic") +
+    
+    # 5) Municipios cabecera (en negritas)
+    geom_sf_label(data = mapa_cab_d, aes(label = NOMBRE_MUNICIPIO),
+                  size = 1.5, fill = "white", color = "black",
+                  alpha = 0, label.size = NA, fontface = "bold") +
+    
+    # 6) Tema del mapa
+    theme_map() +
+    
+    # 7) Título y leyenda
+    labs(title = paste("MAPA DEL DISTRITO JUDICIAL", d),
+         fill  = "Municipio")
+  
+  # Imprimir/añadir el mapa al PDF
+  print(p)
+}
+
+# Cerrar el dispositivo PDF
+dev.off()
+
+
