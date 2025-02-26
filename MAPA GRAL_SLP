@@ -127,17 +127,18 @@ ggplot() +
         fontface = "italic"
     ) +
     
-    # Municipios cabecera (negritas)
-    geom_sf_label(
-        data = mapa_cab, 
-        aes(label = NOMBRE_MUNICIPIO),
-        size = 1.5,
-        fill = "white",
-        color = "black",
-        alpha = 0,
-        label.size = NA,
-        fontface = "bold"
-    ) +
+# Municipios cabecera (nombre + distrito en la segunda línea)
+geom_sf_label(
+  data = mapa_cab,
+  aes(label = paste0(NOMBRE_MUNICIPIO, "\n", Distrito_Judicial)),  # <--- Cambio aquí
+  size = 1.5,
+  fill = "white",
+  color = "black",
+  alpha = 0,
+  label.size = NA,
+  fontface = "bold"
+) +
+
     
     theme_map() + 
     # Forzar la leyenda a mostrarse en 1 sola columna 
