@@ -1,0 +1,134 @@
+# 1) Cargar librerías
+library(sf)        # Para leer y manejar objetos espaciales
+library(dplyr)     # Para manipular data frames (join, mutate, etc.)
+library(ggplot2)   # Para graficar
+library(ggthemes)  # Para usar theme_map()
+
+# 2) Leer el archivo GeoPackage
+ruta_gpkg <- "D:/52556/Documents/PRI_24/SNAL_PRI/data/mapa_MUN.gpkg"
+mapa_MUN <- st_read(ruta_gpkg)
+
+# 3) Crear (o cargar) tu DataFrame con la columna CVE_MUN (y la asignación de Distritos Judiciales)
+#    Ajusta este ejemplo según tus datos "municipios_slp".
+#    Asegúrate de que la columna se llame CVE_MUN en ambos.
+
+municipios_slp <- data.frame(
+    CVE_MUN = c(1,2,3,4,5,6,7,8,9,10,
+                11,12,13,14,15,16,17,18,19,20,
+                21,22,23,24,25,26,27,28,29,30,
+                31,32,33,34,35,36,37,38,39,40,
+                41,42,43,44,45,46,47,48,49,50,
+                51,52,53,54,55,56,57,58),
+    Nombre_MUN = c(
+        "Ahualulco","Alaquines","Aquismón","Armadillo de los Infante","Cárdenas",
+        "Catorce","Cedral","Cerritos","Cerro de San Pedro","Ciudad del Maíz",
+        "Ciudad Fernández","Tancanhuitz","Ciudad Valles","Coxcatlán","Charcas",
+        "Ebano","Guadalcázar","Huehuetlán","Lagunillas","Matehuala",
+        "Mexquitic de Carmona","Moctezuma","Rayón","Rioverde","Salinas",
+        "San Antonio","San Ciro de Acosta","San Luis Potosí","San Martín Chalchicuautla","San Nicolás Tolentino",
+        "Santa Catarina","Santa María del Río","Santo Domingo","San Vicente Tancuayalab","Soledad de Graciano Sánchez","Tamasopo",
+        "Tamazunchale","Tampacán","Tampamolón Corona","Tamuín",
+        "Tanlajás","Tanquián de Escobedo","Tierra Nueva","Vanegas","Venado",
+        "Villa de Arriaga","Villa de Guadalupe","Villa de la Paz","Villa de Ramos","Villa de Reyes",
+        "Villa Hidalgo","Villa Juárez","Axtla de Terrazas","Xilitla","Zaragoza",
+        "Villa de Arista","Matlapa","El Naranjo"
+    ),
+    # Asignar distrito (adaptado a tu información)
+    Distrito_Judicial = c(
+        "I","IV","VII","I","IV",
+        "II","II","IX","I","V",
+        "III","VII","VI","VII","XI",
+        "VI","X","VII","IV","II",
+        "I","XI","IV","III","XII",
+        "VII","III","I","VIII","IX",
+        "IV","XIII","XI","VI","I","IV",
+        "VIII","VIII","VII","VI",
+        "VI","VII","XIII","II","XI",
+        "I","II","II","XII","XIII",
+        "X","IX","VIII","VII","I",
+        "X","VIII","V"
+    )
+)
+
+# 4) Convertir ambas CVE_MUN a numérico (si fuera factor o caracter)
+mapa_MUN <- mapa_MUN %>%
+    mutate(CVE_MUN = as.numeric(CVE_MUN))
+
+municipios_slp <- municipios_slp %>%
+    mutate(CVE_MUN = as.numeric(CVE_MUN))
+
+mapa_MUN <- filter(mapa_MUN, ENTIDAD == 24)
+
+# 5) Unir por CVE_MUN
+mapa_unido <- mapa_MUN %>%
+    left_join(municipios_slp, by = "CVE_MUN")
+
+# 6) Definir las cabeceras de distrito judicial:
+cabeceras <- c(
+    "San Luis Potosí", "Matehuala", "Rioverde", "Cárdenas", "Ciudad del Maíz",
+    "Ciudad Valles", "Tancanhuitz", "Tamazunchale", "Cerritos",
+    "Guadalcázar", "Venado", "Salinas", "Santa María del Río"
+)
+
+# Crear dos subconjuntos: uno con cabeceras y otro con no-cabeceras
+mapa_cab     <- mapa_unido %>% filter(NOMBRE_MUNICIPIO %in% cabeceras)
+mapa_no_cab  <- mapa_unido %>% filter(!NOMBRE_MUNICIPIO %in% cabeceras)
+
+# 7) Graficar el mapa, coloreando por 'Distrito_Judicial'
+#    y colocando las etiquetas con geom_sf_label.
+#    Usaremos dos capas de texto:
+#    - una normal para municipios que no son cabecera
+#    - otra en negritas (fontface = "bold") para las cabeceras.
+
+# 6.1) Sustituir "San Luis Potosí" con salto de línea
+mapa_cab <- mapa_cab %>%
+  mutate(
+    NOMBRE_MUNICIPIO = ifelse(
+      NOMBRE_MUNICIPIO == "San Luis Potosí",
+      "San Luis\nPotosí", # <-- aquí el 'enter'
+      NOMBRE_MUNICIPIO
+    )
+  )
+
+
+
+ggplot() +
+    # Malla de municipios no cabecera
+    geom_sf(data = mapa_unido, aes(fill = Distrito_Judicial), 
+            color = "black", size = 0.2) +
+    
+    # Etiquetas de municipios no cabecera
+    geom_sf_label(
+        data = mapa_no_cab, 
+        aes(label = NOMBRE_MUNICIPIO),
+        size = 1,
+        fill = "white",
+        color = "black",
+        alpha = 0,        # Texto sin fondo "visible"
+        label.size = NA,
+  fontface = "italic"   # <--- Cursiva
+    ) +
+     
+    # Etiquetas de cabeceras (en negritas)
+    geom_sf_label(
+        data = mapa_cab, 
+        aes(label = NOMBRE_MUNICIPIO),
+        size = 1.5,
+        fill = "white",
+        color = "black",
+        alpha = 0,
+        label.size = NA,
+        fontface = "bold" # <--- Aquí la negrita
+    ) +
+    
+    # Tema de mapa y ajustes de leyenda
+    theme_map() + 
+    guides(fill = guide_legend(ncol = 8)) +
+    theme(legend.position = "bottom") +
+    
+    # Título, leyenda y caption
+    labs(
+        title = "Mapa Municipal de los Distritos Judiciales de San Luis Potosí",
+        fill  = "Distrito Judicial",
+        caption = "HÉCTOR VEGA ROBLES\nLICENCIADO EN DERECHO\nMAESTRO EN POLÍTICA CRIMINAL\nESPECIALISTA EN LITIGACIÓN PENAL ORAL"
+    )
