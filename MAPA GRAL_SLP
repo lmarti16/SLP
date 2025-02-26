@@ -58,7 +58,7 @@ municipios_slp <- municipios_slp %>%
     mutate(CVE_MUN = as.numeric(CVE_MUN))
 
 mapa_MUN <- filter(mapa_MUN, ENTIDAD == 24)
-
+https://github.com/lmarti16/SLP/blob/main/MAPA%20GRAL_SLP
 # 5) Unir por CVE_MUN
 mapa_unido <- mapa_MUN %>%
     left_join(municipios_slp, by = "CVE_MUN")
